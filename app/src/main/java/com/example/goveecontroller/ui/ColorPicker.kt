@@ -1,5 +1,6 @@
 package com.example.goveecontroller.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,10 +17,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,6 +38,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -153,8 +163,28 @@ fun HsvPicker(
             drawCircle(Color.White, radius = 20f, center = Offset(cx, size.height / 2), style = Stroke(width = 7f))
         }
         Spacer(Modifier.height(12.dp))
-        // Preview + hex
+        // White temperature — candlelight to daylight
+        var tempK by remember { mutableFloatStateOf(4000f) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("White", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(52.dp))
+            Slider(
+                value = tempK,
+                onValueChange = {
+                    tempK = it
+                    update(kelvinToHsv(it.toInt()))
+                },
+                onValueChangeFinished = { onDone(hsv) },
+                valueRange = 2700f..6500f,
+                modifier = Modifier.weight(1f),
+            )
+            Text("${tempK.toInt()}K", fontFamily = FontFamily.Monospace)
+        }
+        Spacer(Modifier.height(12.dp))
+        // Preview + hex + copy
         val (r, g, b) = hsv.toRgb()
+        val hex = "#%02X%02X%02X".format(r, g, b)
+        val clipboard = LocalClipboardManager.current
+        val toastCtx = LocalContext.current
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(52.dp)
@@ -164,12 +194,36 @@ fun HsvPicker(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                "#%02X%02X%02X".format(r, g, b),
+                hex,
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = {
+                clipboard.setText(AnnotatedString(hex))
+                Toast.makeText(toastCtx, "Copied $hex", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Default.ContentCopy, "Copy hex")
+            }
         }
     }
+}
+
+/** Approximate white-point for a color temperature (Tanner Helland). */
+fun kelvinToHsv(kelvin: Int): Hsv {
+    val t = (kelvin / 100.0).coerceIn(10.0, 150.0)
+    val r = if (t <= 66) 255.0 else (329.698727446 * Math.pow(t - 60, -0.1332047592)).coerceIn(0.0, 255.0)
+    val g = if (t <= 66) {
+        (99.4708025861 * Math.log(t) - 161.1195681661).coerceIn(0.0, 255.0)
+    } else {
+        (288.1221695283 * Math.pow(t - 60, -0.0755148492)).coerceIn(0.0, 255.0)
+    }
+    val b = when {
+        t >= 66 -> 255.0
+        t <= 19 -> 0.0
+        else -> (138.5177312231 * Math.log(t - 10) - 305.0447927307).coerceIn(0.0, 255.0)
+    }
+    return Color((r / 255).toFloat(), (g / 255).toFloat(), (b / 255).toFloat()).toHsv()
 }
 
 /** Gradient presets: 2–3 stops each, interpolated to 15 segments on apply. */

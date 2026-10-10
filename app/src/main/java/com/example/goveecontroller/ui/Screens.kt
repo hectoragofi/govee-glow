@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,6 +66,7 @@ import com.example.goveecontroller.ble.MusicProfile
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ControlScreen(ble: GoveeBleManager) {
+    val ctx = LocalContext.current
     val connected by ble.connected.collectAsState()
     val connecting by ble.connecting.collectAsState()
     val name by ble.connectedName.collectAsState()
@@ -121,10 +123,18 @@ fun ControlScreen(ble: GoveeBleManager) {
                         initial = current,
                         onChange = { current = it.toColor() },
                         onDone = {
-                            val (r, g, b) = it.toRgb()
-                            ble.color(r, g, b)
+                            current = it.toColor()
+                            sendSolid(ble, ctx, current)
                         },
                     )
+                    CustomColorsRow(current) { c ->
+                        current = c
+                        sendSolid(ble, ctx, c)
+                    }
+                    RecentsRow { c ->
+                        current = c
+                        sendSolid(ble, ctx, c)
+                    }
                     // Animated glow strip — mirrors your pick with M3 motion.
                     val glow by animateColorAsState(current, label = "glow")
                     Box(
@@ -145,11 +155,7 @@ fun ControlScreen(ble: GoveeBleManager) {
                             Row(
                                 Modifier.clip(CircleShape).clickable {
                                     current = c
-                                    ble.color(
-                                        (c.red * 255).toInt(),
-                                        (c.green * 255).toInt(),
-                                        (c.blue * 255).toInt(),
-                                    )
+                                    sendSolid(ble, ctx, c)
                                 }.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -331,6 +337,7 @@ fun GradientScreen(ble: GoveeBleManager) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SegmentsScreen(ble: GoveeBleManager) {
+    val ctx = LocalContext.current
     val selected = remember { mutableStateListOf<Int>().apply { addAll(1..15) } }
     var current by remember { mutableStateOf(Color(0xFFFF5000)) }
 
@@ -364,10 +371,22 @@ fun SegmentsScreen(ble: GoveeBleManager) {
                     HsvPicker(
                         initial = current,
                         onChange = { current = it.toColor() },
-                        onDone = { paintSelected(ble, selected, it.toColor()) },
+                        onDone = {
+                            current = it.toColor()
+                            PresetStore.record(ctx, hexOf(current))
+                            paintSelected(ble, selected, current)
+                        },
                     )
+                    CustomColorsRow(current) { c ->
+                        current = c
+                        PresetStore.record(ctx, hexOf(c))
+                        paintSelected(ble, selected, c)
+                    }
                     Button(
-                        onClick = { paintSelected(ble, selected, current) },
+                        onClick = {
+                            PresetStore.record(ctx, hexOf(current))
+                            paintSelected(ble, selected, current)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
                     ) { Text("Paint ${selected.size} zones") }
@@ -375,6 +394,15 @@ fun SegmentsScreen(ble: GoveeBleManager) {
             }
         }
     }
+}
+
+private fun sendSolid(ble: GoveeBleManager, ctx: android.content.Context, color: Color) {
+    ble.color(
+        (color.red * 255).toInt(),
+        (color.green * 255).toInt(),
+        (color.blue * 255).toInt(),
+    )
+    PresetStore.record(ctx, hexOf(color))
 }
 
 private fun paintSelected(ble: GoveeBleManager, selected: List<Int>, color: Color) {
