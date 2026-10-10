@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_power_desc">Govee Glow power toggle</string>
+    <string name="widget_bright_desc">Govee Glow brightness stepper</string>
+</resources>
