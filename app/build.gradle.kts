@@ -43,10 +43,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.activity:activity-compose:1.11.0")
 
-    // Material 3 Expressive — 1.3.1+ ships expressive components
-    // (LoadingIndicator, SplitButton, ButtonGroup, expressive shapes/motion)
-    implementation("androidx.compose.material3:material3:1.3.1")
-    implementation("androidx.compose.material3:material3-window-size-class:1.3.1")
+    // Material 3 1.4 (from the BOM) ships the expressive shape, type, and
+    // ShortNavigationBar APIs used by the UI.
+    implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.navigation:navigation-compose:2.9.5")
 

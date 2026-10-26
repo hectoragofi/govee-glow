@@ -7,22 +7,28 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,26 +111,33 @@ fun colorOf(hex: String): Color {
 @Composable
 fun CustomColorsRow(current: Color, onPick: (Color) -> Unit) {
     val ctx = LocalContext.current
-    val v by PresetStore.version.collectAsState()
-    @Suppress("UNUSED_EXPRESSION")
-    v.let { }
-    val customs = PresetStore.customs(ctx)
+    val version by PresetStore.version.collectAsState()
+    val customs = remember(version) { PresetStore.customs(ctx) }
     SwatchRow(
-        title = "My colors (${customs.size}/${PresetStore.MAX_CUSTOM})",
+        title = "My colors · ${customs.size}/${PresetStore.MAX_CUSTOM}",
         colors = customs,
         onPick = onPick,
-        onLongPressHint = "Long-press to delete",
+        selectedHex = hexOf(current),
+        onLongPressHint = "Long-press a swatch to remove it",
         trailing = {
+            val haptic = LocalHapticFeedback.current
             if (customs.size < PresetStore.MAX_CUSTOM) {
                 Box(
-                    Modifier.size(44.dp).clip(CircleShape)
-                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), CircleShape)
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             PresetStore.addCustom(ctx, hexOf(current))
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Default.Add, "Save current color", tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.Add,
+                        "Save current color",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         },
@@ -135,10 +148,8 @@ fun CustomColorsRow(current: Color, onPick: (Color) -> Unit) {
 @Composable
 fun RecentsRow(onPick: (Color) -> Unit) {
     val ctx = LocalContext.current
-    val v by PresetStore.version.collectAsState()
-    @Suppress("UNUSED_EXPRESSION")
-    v.let { }
-    val recents = PresetStore.recents(ctx)
+    val version by PresetStore.version.collectAsState()
+    val recents = remember(version) { PresetStore.recents(ctx) }
     if (recents.isEmpty()) return
     SwatchRow(title = "Recent", colors = recents, onPick = onPick)
 }
@@ -149,29 +160,60 @@ private fun SwatchRow(
     title: String,
     colors: List<String>,
     onPick: (Color) -> Unit,
+    selectedHex: String? = null,
     onLongPressHint: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     onDelete: ((String) -> Unit)? = null,
 ) {
     if (colors.isEmpty() && trailing == null) return
+    val haptic = LocalHapticFeedback.current
     Text(title, style = MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        colors.forEach { hex ->
-            val c = colorOf(hex)
-            var mod = Modifier.size(44.dp).clip(CircleShape)
-                .background(c)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-            mod = if (onDelete != null) {
-                mod.combinedClickable(
-                    onClick = { onPick(c) },
-                    onLongClick = { onDelete(hex) },
-                )
-            } else {
-                mod.clickable { onPick(c) }
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(end = 4.dp),
+    ) {
+        items(colors, key = { it }) { hex ->
+            val color = colorOf(hex)
+            val selected = selectedHex == hex
+            Box(
+                Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(color)
+                    .border(
+                        width = if (selected) 3.dp else 1.dp,
+                        color = if (selected) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.outlineVariant,
+                        shape = CircleShape,
+                    )
+                    .then(
+                        if (onDelete != null) {
+                            Modifier.combinedClickable(
+                                onClick = { onPick(color) },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onDelete(hex)
+                                },
+                            )
+                        } else {
+                            Modifier.combinedClickable(onClick = { onPick(color) })
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = readableOn(color),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
-            Box(mod)
         }
-        trailing?.invoke()
+        if (trailing != null) {
+            item(key = "trailing") { trailing() }
+        }
     }
     if (onLongPressHint != null && colors.isNotEmpty()) {
         Text(

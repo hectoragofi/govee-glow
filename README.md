@@ -1,105 +1,106 @@
 <div align="center">
 
-# ✨ Govee Glow
+# Govee Glow
 
-**A Material 3 Expressive controller for Govee Bluetooth LED strips — no cloud, no account, no Govee app.**
+Local Android control for the Govee H6125 Bluetooth LED strip. No account, no cloud, no Govee app.
 
-![Platform](https://img.shields.io/badge/platform-Android%2026%2B-3DDC84?style=flat-square)
-![UI](https://img.shields.io/badge/UI-Material%203%20Expressive-6750A4?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84?style=flat-square)
+![UI](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2F%20Material%203-4285F4?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
-![Verified](https://img.shields.io/badge/packets-camera--verified-brightgreen?style=flat-square)
-
-Turn your Bluetooth-only Govee strip into a first-class Android citizen:
-wallpaper-matched theme, home-screen widgets, Quick Settings tile, Devices-panel
-controls, music sync that actually syncs, smooth gradients, and sunrise/sunset automations.
 
 </div>
 
-| App | Proof: single-packet color | Proof: 15-zone gradient |
+| Control tab | Solid color | 15-zone gradient |
 |---|---|---|
-| ![App UI](assets/app-control.png) | ![Green, first try that worked](assets/verified-color.jpg) | ![Rainbow across 15 segments](assets/verified-gradient.jpg) |
-
-> The photos on the right aren't renders — they're the author's actual H6125,
-> photographed by a webcam while a fuzzer spoke to it over BLE. Every frame in
-> this app earned its place the same way.
-
----
+| ![Control screen](assets/app-control.png) | ![H6125 lit green](assets/verified-color.jpg) | ![Rainbow across 15 segments](assets/verified-gradient.jpg) |
 
 ## Features
 
-- 🎨 **Real color picker** — HSV square + hue ribbon + presets, animated glow preview
-- 🌈 **Gradients** — 6 presets + custom 2-stop blends, painted as 15 per-segment writes
-- 🎯 **15-zone RGBIC control** — paint any combination of segments
-- 🎵 **Music sync that works** — palette upload + measured profile bytes (see below), mic is on the strip
-- 🔗 **Auto-link** — remembers your strip, connects on open, re-links on drop
-- 🏠 **Widgets** — power toggle + brightness stepper, wallpaper-tinted (Monet)
-- ⚡ **Quick Settings tile** + **Devices-panel** power/brightness controls
-- ⏰ **Automations** — schedules (time + days + on/off/dim/color) and **sunset→ON / sunrise→OFF** with offsets, computed on-device, survives reboot
-- 🧪 **Lab** — BLE scanner, raw 20-byte packet sender (auto-XOR), live packet log
+- Power, brightness, and color control: HSV picker, white temperature slider, hex copy, eight built-in presets, 12 saved colors, and eight recent colors.
+- Six gradient presets and a custom two-color blend, with direction flip and a hardware gradient toggle.
+- 15-zone RGBIC painting: select any subset of segments, with All, Left, Right, Invert, and None shortcuts.
+- Music mode from the strip's own microphone: three profiles measured on the H6125, sensitivity control, and a two-color palette.
+- Home screen widgets for power and brightness, a Quick Settings tile, and Android 11+ device controls.
+- Schedules by time and weekday (on, off, dim, or color) plus sunset and sunrise rules with offsets. Both are computed on the phone and restored after reboot.
+- Lab tab with a BLE scanner, auto-link settings, a raw 20-byte packet sender with automatic XOR, and a packet log.
 
-## The protocol (H6125, camera-verified)
+## Install
 
-All commands: 20 bytes over `00010203-0405-0607-0809-0a0b0c0d2b11`
-(WRITE_NO_RESPONSE), last byte = XOR of the first 19. Keep-alive
-`aa0100…ab` every ~2 s or the strip drops you.
+Download `govee-glow-v1.1.apk` from [Releases](https://github.com/hectoragofi/govee-glow/releases) and sideload it. Requires Android 8.0 or newer and a BLE-capable phone.
+
+To build from source, open the project in Android Studio (AGP 8.9.2, JDK 17, compileSdk 36) and run it on a physical device. Emulators cannot do BLE.
+
+Close the official Govee app before connecting. Bluetooth-only strips accept one connection at a time.
+
+## Device support
+
+Tested on an H6125 only (15-zone RGBIC, Bluetooth only). Other Govee BLE controllers use different services, frame layouts, scene IDs, and music profile bytes. The legacy solid-color frame `33 05 02 RR GG BB` is included for basic H61xx strips, but it has not been tested on one here.
+
+## Protocol
+
+Service `00010203-0405-0607-0809-0a0b0c0d1910`, write characteristic `00010203-0405-0607-0809-0a0b0c0d2b11` (WRITE_NO_RESPONSE), notify characteristic `00010203-0405-0607-0809-0a0b0c0d2b10`.
+
+Every command is 20 bytes. Bytes 0-18 carry the payload padded with zeros; byte 19 is the XOR of the first 19. The strip drops an idle connection after about 10 seconds, so the app sends `aa 01 00 ... 00 ab` every 2 seconds.
+
+The table shows the meaningful payload bytes. Pad to 19 bytes with zeros and append the checksum before sending.
 
 | Action | Frame |
 |---|---|
-| ON / OFF | `33 01 01` / `33 01 00` |
-| Brightness 0–100 | `33 04 <pct>` |
+| Power on / off | `33 01 01` / `33 01 00` |
+| Brightness 0-100 | `33 04 <percent>` |
 | Solid color | `33 05 15 01 RR GG BB 00 00 00 00 00 FF 7F` |
-| Per-segment | `33 05 15 01 RR GG BB 00 00 00 00 00 LEFT RIGHT` |
-| Music palette | `a3 00 01 02 41 <profile> <n> <RGB…>` → `a3 ff …` (send twice) |
-| Music start | `33 05 13 <profile> <sensitivity 0–99>` |
-| Music stop | any solid-color frame |
-| Gradient | 15× segment writes, interpolated |
+| Per-segment color | `33 05 15 01 RR GG BB 00 00 00 00 00 <left> <right>` |
+| Music palette | `a3 00 01 02 41 <profile> <count> <RGB...>`, then `a3 ff <RGB...>`; send each fragment twice |
+| Music start | `33 05 13 <profile> <sensitivity 0-99>` |
+| Music stop | any solid color frame |
+| Hardware gradient | `33 a3 01` / `33 a3 00` |
+| Scene | `33 05 04 <scene id>` |
 
-Two things the public writeups get wrong for this firmware:
+Some details differ from the commonly published layouts for this family:
 
-1. **The segment mask sits at bytes 12–13, not 8–9.** Every doc says
-   `…RR GG BB 00 00 FF 7F`; the H6125 wants five zero bytes first. Found by
-   fuzzing 10 candidates while a webcam watched the strip.
-2. **Music is `33 05 13`, not `33 05 0C`.** Measured profiles on H6125:
-   `0x03` Rhythm (strong), `0x05` Pulse (medium), `0x33` Flow (gentle).
-   Profile IDs are per-device — don't copy them to other models.
+- The segment mask lives at bytes 12 and 13, not 8 and 9. Bytes 8-11 must be zero. The left byte covers segments 1-8; the right byte covers 9-15. This layout was found by testing ten candidate frames against the strip.
+- Music starts with `33 05 13`, not `33 05 0c`. The profiles measured on this unit are `03` Rhythm (strong), `05` Pulse (medium), and `33` Flow (gentle). Profile IDs can differ between devices.
 
-Pure-Kotlin, dependency-free implementation lives in
-`app/src/main/java/com/example/goveecontroller/ble/GoveeProtocol.kt`.
-A matching Python harness (`tools/`: scanner, fuzzer, camera-in-the-loop
-verifier, music profiler, gradient painter) is included so you can re-derive
-any of this on your own strip.
+Scene IDs in the app come from H6199 research. Some work on the H6125 and some do not; the Lab tab is there to try them.
 
-## Get it
+The Kotlin implementation is in [GoveeProtocol.kt](app/src/main/java/com/example/goveecontroller/ble/GoveeProtocol.kt) and has no dependencies outside the Kotlin standard library.
 
-**Option A — APK:** grab `app-debug.apk` from
-[Releases](../../releases) and sideload it (Android 8+).
+## Tools
 
-**Option B — build it:** open this folder in Android Studio (Ladybug+),
-run on a physical phone (emulators can't do BLE).
+The `tools/` folder contains the Python scripts used to check frames against hardware. They talk to the strip over BLE directly and do not use the app.
+
+| Script | Purpose |
+|---|---|
+| `test_govee.py` | Scan, then send power, color, and brightness frames. |
+| `fuzz_govee.py` | Send candidate color frames while you watch the strip. |
+| `auto_fuzz.py` | Webcam loop that detects when a candidate frame changes the strip. |
+| `verify_gradient.py` | Paint single segments and a 15-zone rainbow, saving photos. |
+| `verify_music.py` | Beep at the strip, sample webcam frames, and compare music profiles. |
 
 ```bash
-pip install bleak opencv-python   # only for tools/
-python tools/test_govee.py --scan # sanity-check your strip first
+pip install bleak opencv-python numpy
+python tools/test_govee.py --scan
 ```
 
-> Force-close the official Govee app first — BT-only strips hold one
-> connection at a time.
+The camera scripts open the webcam with `CAP_DSHOW`, so they are written for Windows. `verify_music.py` also uses `winsound` and will not run on macOS or Linux without changes.
 
-## How it was built
+## How the protocol was checked
 
-Reverse-engineered from public research (coding.kiwi H6054, Obi2000 H6199,
-egold555 H6113, allepet H6125, chvolkmann `govee_btled`, paulo's music-mode
-writeup), then every unknown byte settled empirically: a PC spoke BLE to the
-strip while a webcam watched it — red→green flips, flicker-vs-beeps profiling,
-15-zone rainbow photos. The `tools/` folder is the lab notebook.
+The starting point was public reverse-engineering work for other Govee strips: coding.kiwi H6054, Obi2000 H6199, egold555 H6113, allepet H6125, chvolkmann's `govee_btled`, and paulo's music-mode writeup. Unknown bytes were settled by sending frames from a PC and pointing a webcam at the strip: color candidates, segment masks, music profiles, and gradient writes. The scripts in `tools/` are the same ones used for those tests, so the checks can be repeated on another unit.
 
-## Disclaimer
+## Notes and limits
 
-Clean-room interoperability work: only short command frames are reproduced,
-no Govee app code, assets, or keys. Made with affection for a good product —
-if you work at Govee and want anything changed, open an issue.
+- The app targets the H6125. Do not expect it to work unchanged on other models.
+- Schedules need the "Alarms & reminders" permission on Android 12+ for exact timing.
+- Sunset and sunrise rules need a one-time location capture; the calculation runs locally.
+- Dynamic color needs Android 12+. Older versions get a fixed theme.
 
 ## Credits
 
-The researchers above for publishing their findings, and one very patient
-LED strip (H6125_5242) that blinked through ~200 test packets without complaint.
+Protocol research by the projects listed above. Test strip: H6125_5242, which sat through roughly 200 frames.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+Not affiliated with Govee. This is clean-room interoperability work; no Govee app code, assets, or keys are included.

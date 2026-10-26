@@ -1,62 +1,95 @@
 package com.example.goveecontroller.ui
 
+import android.content.ClipData
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** HSV state for the picker (hue 0..360, sat/value 0..1). */
 data class Hsv(val h: Float, val s: Float, val v: Float) {
     fun toColor(): Color = Color.hsv(h, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
+
     fun toRgb(): Triple<Int, Int, Int> {
         val c = toColor()
-        return Triple((c.red * 255).roundToInt(), (c.green * 255).roundToInt(), (c.blue * 255).roundToInt())
+        return Triple(
+            (c.red * 255).roundToInt(),
+            (c.green * 255).roundToInt(),
+            (c.blue * 255).roundToInt(),
+        )
     }
 }
 
 fun Color.toHsv(): Hsv {
-    val r = red; val g = green; val b = blue
-    val max = maxOf(r, g, b); val min = minOf(r, g, b)
+    val r = red
+    val g = green
+    val b = blue
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
     val d = max - min
     val h = when {
         d == 0f -> 0f
@@ -68,9 +101,15 @@ fun Color.toHsv(): Hsv {
     return Hsv((h + 360f) % 360f, s, max)
 }
 
+fun Color.toRgbTriple(): Triple<Int, Int, Int> = Triple(
+    (red * 255).roundToInt(),
+    (green * 255).roundToInt(),
+    (blue * 255).roundToInt(),
+)
+
 /**
- * Proper color picker: saturation/value square + hue ribbon + preview.
- * Calls onChange live during drag, onDone when the finger lifts.
+ * Saturation/value field + hue ribbon + optional white-temperature slider.
+ * Calls [onChange] live and [onDone] whenever the finger lifts.
  */
 @Composable
 fun HsvPicker(
@@ -78,132 +117,246 @@ fun HsvPicker(
     onChange: (Hsv) -> Unit,
     onDone: (Hsv) -> Unit,
     modifier: Modifier = Modifier,
+    showTemperature: Boolean = true,
 ) {
-    var hsv by remember(initial) { androidx.compose.runtime.mutableStateOf(initial.toHsv()) }
+    var hsv by remember { mutableStateOf(initial.toHsv()) }
+    val currentOnChange by rememberUpdatedState(onChange)
+    val currentOnDone by rememberUpdatedState(onDone)
 
-    fun update(n: Hsv) {
-        hsv = n
-        onChange(n)
+    fun update(next: Hsv) {
+        hsv = next
+        currentOnChange(next)
     }
 
-    Column(modifier) {
-        // SV square
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val hueColor = Color.hsv(hsv.h, 1f, 1f)
+        val fieldShape = RoundedCornerShape(24.dp)
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(190.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.hsv(hsv.h, 1f, 1f))
-                .pointerInput(hsv.h) {
-                    detectDragGestures(
-                        onDragEnd = { onDone(hsv) },
-                    ) { change, _ ->
+                .height(212.dp)
+                .clip(fieldShape)
+                .background(hueColor)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), fieldShape)
+                .semantics { contentDescription = "Saturation and brightness" }
+                .pointerInput(Unit) {
+                    detectDragGestures(onDragEnd = { currentOnDone(hsv) }) { change, _ ->
                         change.consume()
-                        val w = size.width.toFloat()
-                        val hgt = size.height.toFloat()
-                        update(hsv.copy(
-                            s = (change.position.x / w).coerceIn(0f, 1f),
-                            v = 1f - (change.position.y / hgt).coerceIn(0f, 1f),
-                        ))
+                        update(
+                            hsv.copy(
+                                s = (change.position.x / size.width).coerceIn(0f, 1f),
+                                v = 1f - (change.position.y / size.height).coerceIn(0f, 1f),
+                            ),
+                        )
                     }
                 }
-                .pointerInput(hsv.h) {
-                    detectTapGestures(
-                        onTap = {
-                            val w = size.width.toFloat()
-                            val hgt = size.height.toFloat()
-                            update(hsv.copy(
-                                s = (it.x / w).coerceIn(0f, 1f),
-                                v = 1f - (it.y / hgt).coerceIn(0f, 1f),
-                            ))
-                            onDone(hsv.copy(
-                                s = (it.x / w).coerceIn(0f, 1f),
-                                v = 1f - (it.y / hgt).coerceIn(0f, 1f),
-                            ))
-                        },
-                    )
+                .pointerInput(Unit) {
+                    detectTapGestures { point ->
+                        val next = hsv.copy(
+                            s = (point.x / size.width).coerceIn(0f, 1f),
+                            v = 1f - (point.y / size.height).coerceIn(0f, 1f),
+                        )
+                        update(next)
+                        currentOnDone(next)
+                    }
                 },
         ) {
-            val w = size.width
-            val hgt = size.height
-            // white→hue horizontally, transparent→black vertically
             drawRect(Brush.horizontalGradient(listOf(Color.White, hueColor)))
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
-            // cursor
-            val cx = hsv.s * w
-            val cy = (1f - hsv.v) * hgt
-            drawCircle(Color.White, radius = 22f, center = Offset(cx, cy), style = Stroke(width = 7f))
-            drawCircle(Color.Black.copy(alpha = 0.35f), radius = 22f, center = Offset(cx, cy), style = Stroke(width = 2.5f))
+            val cx = hsv.s * size.width
+            val cy = (1f - hsv.v) * size.height
+            drawCircle(Color.Black.copy(alpha = 0.3f), 14.dp.toPx(), Offset(cx, cy), style = Stroke(6.dp.toPx()))
+            drawCircle(Color.White, 12.dp.toPx(), Offset(cx, cy), style = Stroke(4.dp.toPx()))
         }
-        Spacer(Modifier.height(12.dp))
-        // Hue ribbon
+
+        val ribbonShape = RoundedCornerShape(20.dp)
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .height(40.dp)
+                .clip(ribbonShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), ribbonShape)
+                .semantics { contentDescription = "Hue" }
                 .pointerInput(Unit) {
-                    detectDragGestures(onDragEnd = { onDone(hsv) }) { change, _ ->
+                    detectDragGestures(onDragEnd = { currentOnDone(hsv) }) { change, _ ->
                         change.consume()
-                        update(hsv.copy(h = (change.position.x / size.width) * 360f))
+                        update(hsv.copy(h = ((change.position.x / size.width) * 360f).coerceIn(0f, 359.9f)))
                     }
                 }
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = {
-                        val n = hsv.copy(h = (it.x / size.width) * 360f)
-                        update(n)
-                        onDone(n)
-                    })
+                    detectTapGestures { point ->
+                        val next = hsv.copy(h = ((point.x / size.width) * 360f).coerceIn(0f, 359.9f))
+                        update(next)
+                        currentOnDone(next)
+                    }
                 },
         ) {
             val stops = (0..12).map { Color.hsv(it * 30f, 1f, 1f) }
             drawRect(Brush.horizontalGradient(stops))
-            val cx = (hsv.h / 360f) * size.width
-            drawCircle(Color.White, radius = 20f, center = Offset(cx, size.height / 2), style = Stroke(width = 7f))
-        }
-        Spacer(Modifier.height(12.dp))
-        // White temperature — candlelight to daylight
-        var tempK by remember { mutableFloatStateOf(4000f) }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("White", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(52.dp))
-            Slider(
-                value = tempK,
-                onValueChange = {
-                    tempK = it
-                    update(kelvinToHsv(it.toInt()))
-                },
-                onValueChangeFinished = { onDone(hsv) },
-                valueRange = 2700f..6500f,
-                modifier = Modifier.weight(1f),
+            val thumbHalf = 6.dp.toPx()
+            val cx = ((hsv.h / 360f) * size.width).coerceIn(thumbHalf, size.width - thumbHalf)
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.25f),
+                topLeft = Offset(cx - thumbHalf - 1.dp.toPx(), 3.dp.toPx()),
+                size = Size(thumbHalf * 2 + 2.dp.toPx(), size.height - 6.dp.toPx()),
+                cornerRadius = CornerRadius(8.dp.toPx()),
             )
-            Text("${tempK.toInt()}K", fontFamily = FontFamily.Monospace)
+            drawRoundRect(
+                color = Color.White,
+                topLeft = Offset(cx - thumbHalf, 4.dp.toPx()),
+                size = Size(thumbHalf * 2, size.height - 8.dp.toPx()),
+                cornerRadius = CornerRadius(8.dp.toPx()),
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        // Preview + hex + copy
+
+        if (showTemperature) {
+            var tempK by remember { mutableFloatStateOf(4000f) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "White",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.width(52.dp),
+                )
+                Slider(
+                    value = tempK,
+                    onValueChange = {
+                        tempK = it
+                        update(kelvinToHsv(it.toInt()))
+                    },
+                    onValueChangeFinished = { onDone(hsv) },
+                    valueRange = 2700f..6500f,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "${tempK.toInt()}K",
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         val (r, g, b) = hsv.toRgb()
         val hex = "#%02X%02X%02X".format(r, g, b)
-        val clipboard = LocalClipboardManager.current
-        val toastCtx = LocalContext.current
+        val clipboard = LocalClipboard.current
+        val clipboardScope = rememberCoroutineScope()
+        val toastContext = LocalContext.current
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(52.dp)
+                Modifier
+                    .size(52.dp)
                     .clip(CircleShape)
                     .background(hsv.toColor())
-                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                hex,
-                fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(hex, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Tap the field or drag to tune",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = {
-                clipboard.setText(AnnotatedString(hex))
-                Toast.makeText(toastCtx, "Copied $hex", Toast.LENGTH_SHORT).show()
+                clipboardScope.launch {
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Hex color", hex)))
+                }
+                Toast.makeText(toastContext, "Copied $hex", Toast.LENGTH_SHORT).show()
             }) {
                 Icon(Icons.Default.ContentCopy, "Copy hex")
+            }
+        }
+    }
+}
+
+private val WARM_WHITE = kelvinToHsv(2700).toColor()
+private val DAYLIGHT = kelvinToHsv(5600).toColor()
+
+/**
+ * A bottom sheet that wraps the picker. [onPreview] runs live so the strip can
+ * follow the finger, while [onConfirm] fires on the explicit use button.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ColorPickerSheet(
+    title: String,
+    initial: Color,
+    onPreview: (Color) -> Unit,
+    onConfirm: (Color) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var color by remember { mutableStateOf(initial) }
+    var pickerSeed by remember { mutableStateOf(initial) }
+    var pickerKey by remember { mutableIntStateOf(0) }
+    val picks = remember {
+        listOf(
+            GlowPick("Warm white", WARM_WHITE),
+            GlowPick("Daylight", DAYLIGHT),
+        ) + GLOW_PICKS
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                FilledTonalIconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "Close")
+                }
+            }
+            key(pickerKey) {
+                HsvPicker(
+                    initial = pickerSeed,
+                    onChange = {
+                        color = it.toColor()
+                        onPreview(color)
+                    },
+                    onDone = {
+                        color = it.toColor()
+                        onPreview(color)
+                    },                )
+            }
+            Text("Quick picks", style = MaterialTheme.typography.titleMedium)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(picks, key = { it.name }) { pick ->
+                    ColorSwatch(
+                        color = pick.color,
+                        onClick = {
+                            pickerSeed = pick.color
+                            pickerKey++
+                            color = pick.color
+                            onPreview(color)
+                        },
+                        selected = pick.color == color,
+                        size = 46.dp,
+                        contentDescription = pick.name,
+                    )
+                }
+            }
+            Button(
+                onClick = {
+                    onConfirm(color)
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Text("Use this color", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -249,24 +402,33 @@ fun interpolateGradient(stops: List<Color>, segments: Int = 15): List<Triple<Int
         val scaled = t * (stops.size - 1)
         val a = scaled.toInt().coerceAtMost(stops.size - 2)
         val f = scaled - a
-        val c0 = stops[a]; val c1 = stops[a + 1]
-        out.add(Triple(
-            ((c0.red + (c1.red - c0.red) * f) * 255).roundToInt(),
-            ((c0.green + (c1.green - c0.green) * f) * 255).roundToInt(),
-            ((c0.blue + (c1.blue - c0.blue) * f) * 255).roundToInt(),
-        ))
+        val c0 = stops[a]
+        val c1 = stops[a + 1]
+        out.add(
+            Triple(
+                ((c0.red + (c1.red - c0.red) * f) * 255).roundToInt(),
+                ((c0.green + (c1.green - c0.green) * f) * 255).roundToInt(),
+                ((c0.blue + (c1.blue - c0.blue) * f) * 255).roundToInt(),
+            ),
+        )
     }
     return out
 }
 
 /** Little gradient preview bar. */
 @Composable
-fun GradientBar(stops: List<Color>, modifier: Modifier = Modifier) {
+fun GradientBar(
+    stops: List<Color>,
+    modifier: Modifier = Modifier,
+    height: Dp = 44.dp,
+) {
+    val shape = RoundedCornerShape(height / 2)
     Box(
         modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(Brush.horizontalGradient(stops)),
+            .height(height)
+            .clip(shape)
+            .background(Brush.horizontalGradient(stops))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), shape),
     )
 }
