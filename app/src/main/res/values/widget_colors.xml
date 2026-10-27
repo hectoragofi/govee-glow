@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Static fallback for Android < 12 -->
-    <color name="widget_bg">#3B2D5C</color>
-    <color name="widget_text">#FFFFFF</color>
+    <color name="widget_card_on_start">#3B2F5C</color>
+    <color name="widget_card_on_end">#241C39</color>
+    <color name="widget_card_off">#1D1926</color>
+    <color name="widget_card_stroke">#26FFFFFF</color>
+
+    <color name="widget_text">#F4EFFF</color>
+    <color name="widget_text_muted">#BFB5D4</color>
+    <color name="widget_accent">#D8C7FF</color>
+    <color name="widget_error_text">#FFB4AB</color>
+
+    <color name="widget_circle_start">#7C5FC7</color>
+    <color name="widget_circle_end">#5A4198</color>
+    <color name="widget_circle_off">#342E42</color>
+    <color name="widget_circle_error">#5A2E38</color>
+    <color name="widget_circle_icon">#FFFFFF</color>
+    <color name="widget_off_icon">#BFB5D4</color>
+
+    <color name="widget_track">#2EFFFFFF</color>
+    <color name="widget_button_base">#1FFFFFFF</color>
+    <color name="widget_button_ripple">#33FFFFFF</color>
 </resources>

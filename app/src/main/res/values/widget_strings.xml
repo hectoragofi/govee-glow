@@ -1,5 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_power_desc">Govee Glow power toggle</string>
-    <string name="widget_bright_desc">Govee Glow brightness stepper</string>
+    <string name="widget_power_desc">See if the strip is on and tap to toggle it.</string>
+    <string name="widget_bright_desc">Step brightness up or down, or open Glow.</string>
+
+    <string name="widget_lights_on">Lights on</string>
+    <string name="widget_lights_off">Lights off</string>
+    <string name="widget_connecting">Connecting</string>
+    <string name="widget_linking_detail">One moment…</string>
+    <string name="widget_strip_offline">Offline</string>
+    <string name="widget_tap_retry">Tap to retry</string>
+    <string name="widget_no_strip">No strip</string>
+    <string name="widget_open_to_pair">Tap to pair</string>
+    <string name="widget_tap_turn_on">Tap to turn on</string>
+    <string name="widget_brightness_detail">%1$d%% brightness</string>
+    <string name="widget_brightness_preview">80% brightness</string>
+
+    <string name="widget_open_app">Open Govee Glow</string>
+    <string name="widget_dim">Dim</string>
+    <string name="widget_brighten">Brighten</string>
+
+    <string name="widget_label_brightness">BRIGHTNESS</string>
+    <string name="widget_label_lights_off">LIGHTS OFF</string>
+    <string name="widget_label_connecting">CONNECTING</string>
+    <string name="widget_label_offline">OFFLINE</string>
+    <string name="widget_label_no_strip">NO STRIP</string>
+    <string name="widget_value_none">—</string>
+
+    <string name="widget_bright_a11y_on">Brightness %1$d%%, lights on. Open Govee Glow.</string>
+    <string name="widget_bright_a11y_off">Brightness %1$d%%, lights off. Open Govee Glow.</string>
+    <string name="widget_bright_a11y_offline">Brightness %1$d%%, strip offline. Open Govee Glow.</string>
+    <string name="widget_bright_a11y_no_strip">No strip paired. Open Govee Glow to pair.</string>
 </resources>

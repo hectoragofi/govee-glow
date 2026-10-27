@@ -26,7 +26,7 @@ Local Android control for the Govee H6125 Bluetooth LED strip. No account, no cl
 
 ## Install
 
-Download `govee-glow-v1.1.apk` from [Releases](https://github.com/hectoragofi/govee-glow/releases) and sideload it. Requires Android 8.0 or newer and a BLE-capable phone.
+Download `govee-glow-v1.3.apk` from [Releases](https://github.com/hectoragofi/govee-glow/releases) and sideload it. Requires Android 8.0 or newer and a BLE-capable phone.
 
 To build from source, open the project in Android Studio (AGP 8.9.2, JDK 17, compileSdk 36) and run it on a physical device. Emulators cannot do BLE.
 

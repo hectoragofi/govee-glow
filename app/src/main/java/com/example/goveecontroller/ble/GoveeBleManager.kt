@@ -163,6 +163,8 @@ class GoveeBleManager(private val appContext: Context) {
             logText("GATT", "ready ✓ ${g.device.address}")
             Log.d(TAG, "gatt ready ${g.device.address}")
             startKeepAlive()
+            com.example.goveecontroller.widget.WidgetState.clearError(appContext)
+            com.example.goveecontroller.widget.WidgetUpdater.refreshAll(appContext)
         }
     }
 
@@ -182,10 +184,14 @@ class GoveeBleManager(private val appContext: Context) {
         }
     }
 
-    /** Auto-connect to the remembered strip by MAC — no scan needed. */
+    /**
+     * Auto-connect to the remembered strip by MAC — no scan needed.
+     * [force] is for explicit widget/system actions, which must link even
+     * when background auto-connect is disabled in the app.
+     */
     @SuppressLint("MissingPermission")
-    fun autoConnect() {
-        if (!_autoEnabled.value) return
+    fun autoConnect(force: Boolean = false) {
+        if (!force && !_autoEnabled.value) return
         val mac = prefs.getString(KEY_MAC, null) ?: return
         if (_connected.value || _connecting.value) return
         val dev = try {
@@ -222,6 +228,8 @@ class GoveeBleManager(private val appContext: Context) {
         _savedName.value = null
         disconnect()
         logText("GATT", "forgotten — pick your strip in the scanner")
+        com.example.goveecontroller.widget.WidgetState.finish(appContext)
+        com.example.goveecontroller.widget.WidgetUpdater.refreshAll(appContext)
     }
 
     private fun rememberDevice(mac: String, name: String?) {
@@ -298,11 +306,13 @@ class GoveeBleManager(private val appContext: Context) {
     fun power(on: Boolean) {
         savePower(on)
         writeRaw(GoveeProtocol.power(on), if (on) "power ON" else "power OFF")
+        com.example.goveecontroller.widget.WidgetState.clearError(appContext)
         com.example.goveecontroller.widget.WidgetUpdater.refreshAll(appContext)
     }
     fun brightness(p: Int) {
         saveBrightness(p)
         writeRaw(GoveeProtocol.brightness(p), "brightness $p%")
+        com.example.goveecontroller.widget.WidgetState.clearError(appContext)
         com.example.goveecontroller.widget.WidgetUpdater.refreshAll(appContext)
     }
     fun color(r: Int, g: Int, b: Int) = writeRaw(GoveeProtocol.color(r, g, b), "color #${
